@@ -1,0 +1,28 @@
+{
+    "folders": [
+        {
+            "path": ".",
+        },
+        {
+            "path": "../Lava"
+        },
+        {
+            "path": "../GeometryExperiments",
+        },
+        {
+            "path": "../AbstractGUI"
+        },
+        {
+            "path": "../WindowAbstractions"
+        },
+        {
+            "path": "../XCB"
+        },
+        {
+            "path": "../OpenType"
+        },
+    ],
+    "settings": {
+        "julia.environmentPath": "/home/belmant/.julia/dev/Diatone"
+    }
+}
