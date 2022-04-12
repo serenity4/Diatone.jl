@@ -1,15 +1,14 @@
 module Diatone
 
-using WindowAbstractions
 using XCB
-using AbstractGUI
-using Lava
+using Lava: unwrap, Surface, Swapchain, Vk, set_presentation_queue
+using WindowAbstractions
+using AbstractGUI: WindowManager
+using Dictionaries
 
 const Optional{T} = Union{T, Nothing}
 
-include("target.jl")
 include("render.jl")
-include("BaseWidgets.jl")
 include("application.jl")
 include("main.jl")
 
