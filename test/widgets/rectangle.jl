@@ -1,10 +1,3 @@
-using Dictionaries
-using GeometryExperiments
-using Lava
-using SPIRV
-
-import ..Diatone
-
 struct Rectangle
   location::Point{2,Float32}
   area::Box{2,Float32}
