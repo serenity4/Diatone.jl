@@ -1,13 +1,17 @@
+struct PendingRendering
+  rg::RenderGraph
+  exec::ExecutionState
+end
+
 struct Renderer
   instance::Instance
   device::Device
   frame_cycle::Dictionary{XCBWindow, FrameCycle{XCBWindow}}
-  materials::Dictionary{UInt64,Any}
   render::Dictionary{XCBWindow, Any}
-  pending::Dictionary{XCBWindow, RenderGraph}
+  pending::Dictionary{XCBWindow, PendingRendering}
 end
 
-Renderer(instance, device) = Renderer(instance, device, Dictionary(), Dictionary(), Dictionary(), Dictionary())
+Renderer(instance, device) = Renderer(instance, device, Dictionary(), Dictionary(), Dictionary())
 
 function add_frame_cycle(rdr::Renderer, win::XCBWindow)
   (; device) = rdr
@@ -25,22 +29,15 @@ end
 
 function delete_frame_cycle(rdr::Renderer, win::XCBWindow)
   (; swapchain) = rdr.frame_cycle[win]
+  if haskey(rdr.pending, win)
+    wait(rdr.pending[win].exec)
+    delete!(rdr.pending, win)
+  end
   delete!(rdr.frame_cycle, win)
+  delete!(rdr.render, win)
 
-  # Can wait for rendering to finish first if it causes issues.
   finalize(swapchain.handle)
   finalize(swapchain.surface.handle)
-end
-
-function render(rec::CompactRecord, rdr::Renderer, window::XCBWindow)
-  ds = draw_state(rec)
-  for object in rdr.pending_objects[window]
-    prog = program(object, rdr.rg.device)
-    !isnothing(prog) && set_program(rec, prog)
-    # Reset draw state to application default.
-    set_draw_state(rec, ds)
-    render(rec, window, object, rdr)
-  end
 end
 
 """
@@ -59,18 +56,24 @@ Get a program for an object to render.
 """
 function program end
 
-get_material!(f, rdr, object) = get_material!(f, rdr, material_hash(object))
-get_material!(f, rdr, hash::UInt64) = get(f, rdr.materials, hash)
-
 function render(f, rdr::Renderer, win::XCBWindow)
-  haskey(rdr.pending, win) && delete!(rdr.pending, win)
-  cycle!(app.renderer.frame_cycle[win]) do image
+  rg_ref = Ref{RenderGraph}()
+  info = cycle!(rdr.frame_cycle[win]) do image
     rg = RenderGraph(rdr.device)
-    insert!(rdr.pending, win, rg)
-    f = rdr.render[win]
+    rg_ref[] = rg
     f(rg, image)
-    render(rg; submit = false)
+    cb = request_command_buffer(rdr.device)
+    baked = render(cb, rg)
+    ensure_layout(cb, image, Vk.IMAGE_LAYOUT_PRESENT_SRC_KHR)
+    info = SubmissionInfo(cb)
+    push!(info.release_after_completion, baked)
+    info
   end
+  set!(rdr.pending, win, PendingRendering(rg_ref[], info))
+end
+
+function Base.wait(rdr::Renderer)
+  wait([exec for (; exec) in rdr.pending])
 end
 
 function render(rdr::Renderer)

@@ -13,16 +13,14 @@ function rectangle_frag(out_color, dd)
   out_color[] = Pointer{Vec{4,Float32}}(dd.material_data)[]
 end
 
-function Diatone.program(::Rectangle, device::Device)
+function program(::Rectangle, device::Device)
   vert = @vertex device.spirv_features rectangle_vert(::Output{Position}::Vec{4,Float32}, ::Input{VertexIndex}::UInt32, ::PushConstant::DrawData)
   frag = @fragment device.spirv_features rectangle_frag(::Output::Vec{4,Float32}, ::PushConstant::DrawData)
 
   Program(device, vert, frag)
 end
 
-function Diatone.render(rec, window, rect::Rectangle)
-  set_material(rec, rect.color)
-  set = PointSet(Translated(rect.area, Translation(rect.location)), Point{2,Float32})
-  idata = [1, 2, 3, 3, 2, 4]
-  Diatone.draw_on_window(rec, window, set.points, idata, alignment = 4)
-end
+indices(::Rectangle) = [1, 2, 3, 3, 2, 4]
+vertices(rect::Rectangle) = PointSet(Translated(rect.area, Translation(rect.location)), Point{2,Float32}).points
+material(rect::Rectangle) = rect.color
+alignment(::Rectangle) = 4
