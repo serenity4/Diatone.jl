@@ -8,11 +8,7 @@ function on_key_pressed(app, details::EventDetails)
     (; key, modifiers) = data
     kc = KeyCombination(key, modifiers)
     if kc ∈ [key"q", key"ctrl+q", key"f4"]
-        throw(CloseWindow(win, "Received closing request from user input"))
-        @info "Closing window."
-        #FIXME: This shouldn't segfault since it's supposed to do the same thing.
-        # Maybe there's a problem with the order of execution.
-        # close(app, win) # shutdown(app) should work as well
+        close(app, win)
     end
 end
 
@@ -30,11 +26,11 @@ end
             (color => (0.01, 0.02, 0.05, 1.0))::Color = graphics()
         end
     end
-    set_callbacks!(app.wm, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app)))
+    set_callbacks!(app, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app)))
 
-    run(app)
+    run(app; wait = false)
     # sleep(5)
     # t = time()
     # while time() < t + 1.0 end
-    Diatone.shutdown(app)
+    shutdown(app)
 end;

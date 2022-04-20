@@ -5,10 +5,10 @@ using XCB
 using XCB: handle_events
 using Lava: Lava, unwrap, Surface, Swapchain, Vk, set_presentation_queue, RenderGraph, Instance, Device, CompactRecord, FrameCycle, cycle!, RenderGraph, ExecutionState, request_command_buffer, SubmissionInfo, ensure_layout
 using WindowAbstractions
-using AbstractGUI: WindowManager
+using AbstractGUI: UIOverlay, react_to_event, InputArea, InputAreaCallbacks, overlay
 using Dictionaries
 
-import XCB: XCBWindow
+import XCB: XCBWindow, set_callbacks!
 import Base: close, run
 import Lava: render
 

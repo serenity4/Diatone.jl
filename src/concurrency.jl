@@ -9,7 +9,9 @@ end
 
 function cancel(spawned::SpawnedTask)
   task = spawned.taskref[]
-  (istaskdone(task) || istaskfailed(task) || !istaskstarted(task)) && return
+  (istaskdone(task) || !istaskstarted(task)) && return
+  # Unwrap the error.
+  istaskfailed(task) && wait(task)
   put!(spawned.ch, CancellationToken())
   spawned
 end
@@ -18,12 +20,12 @@ function wrap_spawned(cond, f, ch::Channel, taskref::Ref{Task})
   token::ConcurrencyToken = nothing
   while cond()
     isready(ch) && (token = take!(ch))
-    token === CancellationToken() && break
-    sleep(0.1)
+    if token === CancellationToken()
+      @info "Stopping $(taskref[])."
+      break
+    end
     f()
-    istaskfailed(taskref[]) && wait(taskref[])
   end
-  @info "Stopping $(taskref[])."
 end
 
 function spawn(cond, f)
