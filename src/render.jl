@@ -3,15 +3,40 @@ struct PendingRendering
   exec::ExecutionState
 end
 
-struct Renderer
+mutable struct Renderer
   instance::Instance
   device::Device
   frame_cycle::Dictionary{XCBWindow, FrameCycle{XCBWindow}}
   render::Dictionary{XCBWindow, Any}
   pending::Dictionary{XCBWindow, PendingRendering}
+  @atomic task::Optional{SpawnedTask}
 end
 
-Renderer(instance, device) = Renderer(instance, device, Dictionary(), Dictionary(), Dictionary())
+function Renderer(; release = false)
+  instance, device = Lava.init(; debug = !release, with_validation = !release, instance_extensions = ["VK_KHR_xcb_surface"])
+  Renderer(instance, device)
+end
+
+Renderer(instance, device) = Renderer(instance, device, Dictionary(), Dictionary(), Dictionary(), nothing)
+
+function start(rdr::Renderer)
+  isnothing(rdr.task) || error("The renderer thread was already started.")
+  foreach(map_window, keys(rdr.render))
+  @atomic rdr.task = @spawn render(rdr)
+end
+
+function cancel(rdr::Renderer)
+  isnothing(rdr.task) && return
+  cancel(rdr.task)
+  @atomic rdr.task = nothing
+end
+
+check_isrunning(rdr::Renderer) = isrunning(rdr) || error("The renderer thread has not been started yet.")
+
+function execute(f, rdr::Renderer; kwargs...)
+  check_isrunning(rdr)
+  execute(f, rdr.task; kwargs...)
+end
 
 function add_frame_cycle(rdr::Renderer, win::XCBWindow)
   (; device) = rdr
@@ -28,16 +53,12 @@ function xcb_surface(instance, win::XCBWindow)
 end
 
 function delete_frame_cycle(rdr::Renderer, win::XCBWindow)
-  (; swapchain) = rdr.frame_cycle[win]
   if haskey(rdr.pending, win)
     wait(rdr.pending[win].exec)
     delete!(rdr.pending, win)
   end
   delete!(rdr.frame_cycle, win)
   delete!(rdr.render, win)
-
-  finalize(swapchain.handle)
-  finalize(swapchain.surface.handle)
 end
 
 """
@@ -69,6 +90,8 @@ function render(f, rdr::Renderer, win::XCBWindow)
     push!(info.release_after_completion, baked)
     info
   end
+  # Wait for previous rendering.
+  haskey(rdr.pending, win) && wait(rdr.pending[win].exec)
   set!(rdr.pending, win, PendingRendering(rg_ref[], info))
 end
 

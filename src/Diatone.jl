@@ -8,8 +8,10 @@ using WindowAbstractions
 using AbstractGUI: UIOverlay, react_to_event, InputArea, InputAreaCallbacks, overlay
 using Dictionaries
 
+using Base: RefValue
+
 import XCB: XCBWindow, set_callbacks!
-import Base: close, run
+import Base: close, run, wait
 import Lava: render
 
 const Optional{T} = Union{T, Nothing}
@@ -17,8 +19,9 @@ const Window = XCBWindow
 
 include("concurrency.jl")
 include("render.jl")
+include("ui.jl")
 include("application.jl")
 
-export Application, Window, render, shutdown
+export Application, Window, render, shutdown, cancel
 
 end

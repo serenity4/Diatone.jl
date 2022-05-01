@@ -21,6 +21,7 @@ function program(::Rectangle, device::Device)
 end
 
 indices(::Rectangle) = [1, 2, 3, 3, 2, 4]
+# indices(::Rectangle) = [1, 3, 2, 2, 3, 4]
 vertices(rect::Rectangle) = PointSet(Translated(rect.area, Translation(rect.location)), Point{2,Float32}).points
 material(rect::Rectangle) = rect.color
 alignment(::Rectangle) = 4
