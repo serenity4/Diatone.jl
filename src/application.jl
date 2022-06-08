@@ -1,65 +1,53 @@
-struct Application
+mutable struct Application
   renderer::Renderer
   ui::UserInterface
+  function Application(; release = false)
+    app = new(Renderer(; release), UserInterface())
+    finalizer(_shutdown, app)
+  end
 end
 
-function Application(; release = false)
-  Application(Renderer(; release), UserInterface())
+function _shutdown(app::Application)
+  tasks = children_tasks()
+  shutdown_children()
+  @async begin
+    ConcurrencyGraph.wait_timeout(all(istaskdone, tasks), 2, 0.001) || @warn "Timeout: Renderer and UI tasks are still alive. Their finalizers will be run but will result in undefined behavior."
+    finalize(app.renderer)
+    finalize(app.ui)
+  end
 end
 
-active_windows(app::Application) = keys(app.renderer.render)
+Base.getproperty(app::Application, name::Symbol) = Protected(getfield(app, name))
+
+function active_windows(app::Application)
+  ret = ConcurrencyGraph.execute(ui -> deepcopy(ui.wm.windows), app.ui, app.ui)
+  iserror(ret) && return XCBWindow[]
+  keys(fetch(ret))
+end
 
 function Base.show(io::IO, ::MIME"text/plain", app::Application)
   print(io, "Application(", length(active_windows(app)), " windows)")
 end
 
-function XCBWindow(app::Application, title::AbstractString; screen = current_screen(app.ui.wm), x = 0, y = 0, width = 1800, height = 950, map = false, attributes = [XCB.XCB_CW_BACK_PIXEL], values = [screen.black_pixel], kwargs...)
-  @execute_maybe_on app.ui win = begin
-    win = XCBWindow(app.ui.wm, title; screen, x, y, width, height, map, attributes, values, kwargs...)
-    overlay(app.ui.overlay, win, [])
-    set_callbacks!(app, win, WindowCallbacks())
-    win
-  end
-  @execute_maybe_on app.renderer add_frame_cycle(app.renderer, win)
+function create_window(app::Application, args...; kwargs...)
+  win = fetch(execute(create_window, app.ui, app.ui, args...; kwargs...))
+  execute(add_frame_cycle, app.renderer, app.renderer, win)
   win
 end
 
-function set_callbacks!(app::Application, win::XCBWindow, callbacks::WindowCallbacks)
-  @execute_maybe_on app.ui set_callbacks!(app.ui.wm, win, WindowCallbacks(app.ui, callbacks))
-end
-
 function close(app::Application, win::XCBWindow)
-  @execute_maybe_on app.ui close(app.ui, win)
-  @execute_maybe_on app.renderer delete_frame_cycle(app.renderer, win)
+  fetch(execute(delete_frame_cycle, app.renderer, app.renderer, win))
+  execute(close, app.ui, app.ui, win)
 end
 
-function render(f, app::Application, win::XCBWindow)
-  @execute_maybe_on app.renderer set!(app.renderer.render, win, f)
-end
+render(f, app::Application, win) = execute(set_render!, app.renderer, f, app.renderer, win)
 
-render(app::Application) = @execute_maybe_on app.renderer render(app.renderer)
+set_callbacks!(app::Application, win::XCBWindow, callbacks::WindowCallbacks) = execute(set_callbacks!, app.ui, app.ui, win, callbacks)
 
 """
-Run the application's event and rendering loops.
+Wait for the application's event and rendering loops to terminate.
 
 The event loop handles window events via WindowAbstractions.
 The rendering loop handles graphics rendering via Lava.
 """
-function run(app::Application; wait = true)
-  start(app.ui)
-  start(app.renderer)
-  wait && Diatone.wait(app)
-  nothing
-end
-
-function wait(app::Application)
-  wait_all(app.ui, app.renderer) || shutdown(app)
-end
-
-function shutdown(app::Application)
-  cancel(app.ui)
-  cancel(app.renderer)
-  for win in active_windows(app)
-    close(app, win)
-  end
-end
+run() = monitor_children(; allow_failures = false)

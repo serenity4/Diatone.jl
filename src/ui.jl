@@ -1,28 +1,18 @@
 mutable struct UserInterface
   wm::XWindowManager
   overlay::UIOverlay{XCBWindow}
-  @atomic task::Optional{SpawnedTask}
+  task::Task
+  function UserInterface()
+    ui = new(XWindowManager(), UIOverlay{XCBWindow}())
+    ui.task = @spawn LoopExecution(0.005) handle_events(ui.wm, time())
+    finalizer(close_windows, ui)
+  end
 end
 
-UserInterface() = UserInterface(XWindowManager(), UIOverlay{XCBWindow}(), nothing)
-
-function start(ui::UserInterface)
-  isnothing(ui.task) || error("The UI thread was already started.")
-  t0 = time()
-  @atomic ui.task = @spawn handle_events(ui.wm, t0; on_iter_last = () -> sleep(0.001))
-end
-
-function cancel(ui::UserInterface)
-  isnothing(ui.task) && return
-  cancel(ui.task)
-  @atomic ui.task = nothing
-end
-
-check_isrunning(ui::UserInterface) = !isnothing(ui.task) || error("The UI thread has not been started yet.")
-
-function execute(f, ui::UserInterface; kwargs...)
-  check_isrunning(ui)
-  execute(f, ui.task; kwargs...)
+function close_windows(ui::UserInterface)
+  for win in values(ui.wm.windows)
+    close(ui, win)
+  end
 end
 
 function close(ui::UserInterface, win::XCBWindow)
@@ -48,3 +38,12 @@ function WindowAbstractions.WindowCallbacks(ui::UserInterface, callbacks::Window
       on_key_released          = ed -> (execute_callback(callbacks, ed); react_to_event(ui.overlay, ed)),
   )
 end
+
+function create_window(ui::UserInterface, title::AbstractString; screen = current_screen(ui.wm), x = 0, y = 0, width = 1800, height = 950, map = true, attributes = [XCB.XCB_CW_BACK_PIXEL], values = [screen.black_pixel], kwargs...)
+  win = XCBWindow(ui.wm, title; screen, x, y, width, height, map, attributes, values, kwargs...)
+  overlay(ui.overlay, win, [])
+  set_callbacks!(ui, win, WindowCallbacks())
+  win
+end
+
+set_callbacks!(ui::UserInterface, win::XCBWindow, callbacks::WindowCallbacks) = set_callbacks!(ui.wm, win, WindowCallbacks(ui, callbacks))

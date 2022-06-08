@@ -9,33 +9,17 @@ mutable struct Renderer
   frame_cycle::Dictionary{XCBWindow, FrameCycle{XCBWindow}}
   render::Dictionary{XCBWindow, Any}
   pending::Dictionary{XCBWindow, PendingRendering}
-  @atomic task::Optional{SpawnedTask}
+  task::Task
+  function Renderer(instance, device)
+    rdr = new(instance, device, Dictionary(), Dictionary(), Dictionary())
+    rdr.task = @spawn LoopExecution(0.005) render(rdr)
+    finalizer(delete_frame_cycles, rdr)
+  end
 end
 
 function Renderer(; release = false)
   instance, device = Lava.init(; debug = !release, with_validation = !release, instance_extensions = ["VK_KHR_xcb_surface"])
   Renderer(instance, device)
-end
-
-Renderer(instance, device) = Renderer(instance, device, Dictionary(), Dictionary(), Dictionary(), nothing)
-
-function start(rdr::Renderer)
-  isnothing(rdr.task) || error("The renderer thread was already started.")
-  foreach(map_window, keys(rdr.render))
-  @atomic rdr.task = @spawn render(rdr)
-end
-
-function cancel(rdr::Renderer)
-  isnothing(rdr.task) && return
-  cancel(rdr.task)
-  @atomic rdr.task = nothing
-end
-
-check_isrunning(rdr::Renderer) = isrunning(rdr) || error("The renderer thread has not been started yet.")
-
-function execute(f, rdr::Renderer; kwargs...)
-  check_isrunning(rdr)
-  execute(f, rdr.task; kwargs...)
 end
 
 function add_frame_cycle(rdr::Renderer, win::XCBWindow)
@@ -45,6 +29,7 @@ function add_frame_cycle(rdr::Renderer, win::XCBWindow)
   swapchain = Swapchain(device, surface, Vk.IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
   cycle = FrameCycle(device, swapchain)
   insert!(rdr.frame_cycle, win, cycle)
+  cycle
 end
 
 function xcb_surface(instance, win::XCBWindow)
@@ -57,29 +42,30 @@ function delete_frame_cycle(rdr::Renderer, win::XCBWindow)
     wait(rdr.pending[win].exec)
     delete!(rdr.pending, win)
   end
-  delete!(rdr.frame_cycle, win)
-  delete!(rdr.render, win)
+  haskey(rdr.frame_cycle, win) && delete!(rdr.frame_cycle, win)
+  haskey(rdr.render, win) && delete!(rdr.render, win)
 end
 
-"""
-    render(rec::CompactRecord, object, rdr::Renderer)
+function delete_frame_cycles(rdr::Renderer)
+  for win in keys(rdr.frame_cycle)
+    delete_frame_cycle(rdr, win)
+  end
+end
 
-Render an object.
+set_render!(f, rdr::Renderer, win::XCBWindow) = set!(rdr.render, win, f)
 
-Should typically set render state (if required) and perform draw calls.
-"""
-function render end
+function render(rdr::Renderer)
+  for (win, fc) in pairs(rdr.frame_cycle)
+    f = get(rdr.render, win, nothing)
+    isnothing(f) && continue
+    idx = acquire_next_image(fc)
+    idx isa Int && render(rdr.render[win], rdr, win, idx)
+  end
+end
 
-"""
-    program(object, device::Device)
-
-Get a program for an object to render.
-"""
-function program end
-
-function render(f, rdr::Renderer, win::XCBWindow)
+function render(f, rdr::Renderer, win::XCBWindow, idx::Integer)
   rg_ref = Ref{RenderGraph}()
-  info = cycle!(rdr.frame_cycle[win]) do image
+  info = cycle!(rdr.frame_cycle[win], idx) do image
     rg = RenderGraph(rdr.device)
     rg_ref[] = rg
     f(rg, image)
@@ -93,14 +79,4 @@ function render(f, rdr::Renderer, win::XCBWindow)
   # Wait for previous rendering.
   haskey(rdr.pending, win) && wait(rdr.pending[win].exec)
   set!(rdr.pending, win, PendingRendering(rg_ref[], info))
-end
-
-function Base.wait(rdr::Renderer)
-  wait([exec for (; exec) in rdr.pending])
-end
-
-function render(rdr::Renderer)
-  for (win, f) in pairs(rdr.render)
-    render(f, rdr, win)
-  end
 end

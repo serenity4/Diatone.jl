@@ -1,9 +1,9 @@
-using Diatone, Dictionaries, GeometryExperiments, Lava, SPIRV, Test, XCB
+using Diatone, Dictionaries, GeometryExperiments, Lava, SPIRV, Test, XCB, ConcurrencyGraph
 
 include("render.jl")
 include("rectangle.jl")
 
-function on_key_pressed(app, details::EventDetails)
+function on_key_pressed(app::Application, details::EventDetails)
     (; win, data) = details
     (; key, modifiers) = data
     kc = KeyCombination(key, modifiers)
@@ -26,30 +26,9 @@ function render_main_window(rg::RenderGraph, image)
 end
 
 @testset "Diatone.jl" begin
-    renderer = Diatone.Renderer()
-    ui = Diatone.UserInterface()
-
-    # # For some reason it blocks for a while.
-    # @testset "Concurrency utilities" begin
-    #     for thread in (renderer, ui)
-    #         Diatone.start(thread)
-    #         @test Diatone.isrunning(thread)
-    #         @test Diatone.@execute(thread, x = 1 + 1) == 2
-    #         cancel(thread)
-    #         @test !Diatone.isrunning(thread)
-    #     end
-    # end
-
-    app = Application(renderer, ui)
-    win = Window(app, "Window 1")
-    render(render_main_window, app, win)
-    set_callbacks!(app, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app)))
-    # map_window(win)
-
-    run(app)
-    # run(app; wait = false)
-    # sleep(5)
-    # t = time()
-    # while time() < t + 1.0 end
-    shutdown(app)
+    app = Application()
+    win = create_window(app, "Window 1")
+    unwrap(fetch(render(render_main_window, app, win)))
+    unwrap(fetch(set_callbacks!(app, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app)))))
+    monitor_children()
 end;
