@@ -3,6 +3,8 @@ using Diatone, Dictionaries, GeometryExperiments, Lava, SPIRV, Test, XCB, Concur
 include("render.jl")
 include("rectangle.jl")
 
+main_task = current_task()
+
 function on_key_pressed(app::Application, details::EventDetails)
     (; win, data) = details
     (; key, modifiers) = data
@@ -10,6 +12,8 @@ function on_key_pressed(app::Application, details::EventDetails)
     @info "Pressing key $kc"
     if kc ∈ [key"q", key"ctrl+q", key"f4"]
         close(app, win)
+        @info "Closing the application."
+        execute(finalize, main_task, app)
     end
 end
 
