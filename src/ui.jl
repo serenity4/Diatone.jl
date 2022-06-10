@@ -4,12 +4,11 @@ mutable struct UserInterface
   task::Task
   function UserInterface()
     ui = new(XWindowManager(), UIOverlay{XCBWindow}())
-    t0 = time()
     ui.task = @spawn LoopExecution(0.005) begin
       while true
         event = poll_for_event(ui.wm)
         isnothing(event) && break
-        handle_events(ui.wm, t0, event)
+        process_event(ui.wm, event)
       end
     end
     finalizer(close_windows, ui)

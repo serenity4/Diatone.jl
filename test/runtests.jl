@@ -1,4 +1,4 @@
-using Diatone, Dictionaries, GeometryExperiments, Lava, SPIRV, Test, XCB, ConcurrencyGraph
+using Diatone, GeometryExperiments, Lava, Test
 
 include("render.jl")
 include("rectangle.jl")

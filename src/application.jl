@@ -36,8 +36,7 @@ function create_window(app::Application, args...; kwargs...)
 end
 
 function close(app::Application, win::XCBWindow)
-  fetch(execute(delete_frame_cycle, app.renderer, app.renderer, win))
-  execute(close, app.ui, app.ui, win)
+  execute(delete_frame_cycle, app.renderer, app.renderer, win), execute(close, app.ui, app.ui, win)
 end
 
 render(f, app::Application, win) = execute(set_render!, app.renderer, f, app.renderer, win)
