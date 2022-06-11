@@ -11,7 +11,7 @@ function _shutdown(app::Application)
   tasks = children_tasks()
   shutdown_children()
   @async begin
-    ConcurrencyGraph.wait_timeout(all(istaskdone, tasks), 2, 0.001) || @warn "Timeout: Renderer and UI tasks are still alive. Their finalizers will be run but will result in undefined behavior."
+    ConcurrencyGraph.wait_timeout(() -> all(istaskdone, tasks), 2, 0.001) || @warn "Timeout: Renderer and UI tasks are still alive. Their finalizers will be run but will result in undefined behavior."
     finalize(app.renderer)
     finalize(app.ui)
   end
@@ -41,7 +41,9 @@ end
 
 render(f, app::Application, win) = execute(set_render!, app.renderer, f, app.renderer, win)
 
-set_callbacks!(app::Application, win::XCBWindow, callbacks::WindowCallbacks) = execute(set_callbacks!, app.ui, app.ui, win, callbacks)
+set_callbacks(app::Application, win::XCBWindow, callbacks::WindowCallbacks) = execute(set_callbacks!, app.ui, app.ui, win, callbacks)
+
+overlay(app::Application, win::Window, areas::AbstractVector{InputArea}) = execute(overlay, app.ui, app.ui, win, copy(areas))
 
 """
 Wait for the application's event and rendering loops to terminate.

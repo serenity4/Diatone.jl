@@ -47,9 +47,11 @@ end
 
 function create_window(ui::UserInterface, title::AbstractString; screen = current_screen(ui.wm), x = 0, y = 0, width = 1800, height = 950, map = true, attributes = [XCB.XCB_CW_BACK_PIXEL], values = [screen.black_pixel], kwargs...)
   win = XCBWindow(ui.wm, title; screen, x, y, width, height, map, attributes, values, kwargs...)
-  overlay(ui.overlay, win, [])
+  overlay(ui, win, [])
   set_callbacks!(ui, win, WindowCallbacks())
   win
 end
 
 set_callbacks!(ui::UserInterface, win::XCBWindow, callbacks::WindowCallbacks) = set_callbacks!(ui.wm, win, WindowCallbacks(ui, callbacks))
+
+overlay(ui::UserInterface, win::Window, areas::AbstractVector) = overlay(ui.overlay, win, areas)
