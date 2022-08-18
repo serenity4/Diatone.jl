@@ -70,7 +70,7 @@ function render(f, rdr::Renderer, win::XCBWindow, idx::Integer)
     rg_ref[] = rg
     f(rg, image)
     cb = request_command_buffer(rdr.device)
-    baked = render(cb, rg)
+    baked = render!(rg, cb)
     ensure_layout(cb, image, Vk.IMAGE_LAYOUT_PRESENT_SRC_KHR)
     info = SubmissionInfo(cb)
     push!(info.release_after_completion, baked)

@@ -1,10 +1,12 @@
-draw_state(obj) = Lava.DrawState()
-
-function render_on_color_attachment(rec, device, objects, color_attachment)
+function render_on_color_attachment(graphics, rg, objects, color_attachment)
   for obj in objects
-    set_material(rec, material(obj))
-    set_draw_state(rec, draw_state(obj))
-    set_program(rec, program(obj, device))
-    draw(rec, vertices(obj), indices(obj), color_attachment; alignment = alignment(obj))
+    rec = StatefulRecording()
+    set_program(rec, program(obj, rg.device))
+    set_invocation_state(rec, setproperties(invocation_state(rec), (;
+      primitive_topology = Vk.PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+      triangle_orientation = Vk.FRONT_FACE_COUNTER_CLOCKWISE,
+    )))
+    set_data(rec, rg, invocation_data(obj))
+    draw(graphics, rec, indices(obj), color_attachment)
   end
 end

@@ -1,26 +1,27 @@
-struct Rectangle
-  location::Point{2,Float32}
-  area::Box{2,Float32}
-  color::NTuple{4,Float32}
+struct PosColor
+  pos::Vec{2,Float32}
+  color::Arr{3,Float32}
 end
 
-function rectangle_vert(position, index, dd)
-  pos = Pointer{Vector{Vec{2,Float32}}}(dd.vertex_data)[index]
+function rectangle_vert(frag_color, position, index, data_address::DeviceAddressBlock)
+  data = Pointer{Vector{PosColor}}(data_address)[index]
+  (; pos, color) = data
   position[] = Vec(pos.x, pos.y, 0F, 1F)
+  frag_color[] = Vec(color[0U], color[1U], color[2U], 1F)
 end
 
-function rectangle_frag(out_color, dd)
-  out_color[] = Pointer{Vec{4,Float32}}(dd.material_data)[]
+function rectangle_frag(out_color, frag_color)
+  out_color[] = frag_color
 end
 
-function program(::Rectangle, device::Device)
-  vert = @vertex device.spirv_features rectangle_vert(::Output{Position}::Vec{4,Float32}, ::Input{VertexIndex}::UInt32, ::PushConstant::DrawData)
-  frag = @fragment device.spirv_features rectangle_frag(::Output::Vec{4,Float32}, ::PushConstant::DrawData)
+struct Rectangle
+  vertices::Vector{PosColor}
+end
+indices(rect::Rectangle) = 1:4
+invocation_data(rect::Rectangle) = rect.vertices
 
+function program(::Rectangle, device)
+  vert = @vertex device.spirv_features rectangle_vert(::Output::Vec{4,Float32}, ::Output{Position}::Vec{4,Float32}, ::Input{VertexIndex}::UInt32, ::PushConstant::DeviceAddressBlock)
+  frag = @fragment device.spirv_features rectangle_frag(::Output::Vec{4,Float32}, ::Input::Vec{4,Float32})
   Program(device, vert, frag)
 end
-
-indices(::Rectangle) = [1, 2, 3, 3, 2, 4]
-vertices(rect::Rectangle) = PointSet(Translated(rect.area, Translation(rect.location)), Point{2,Float32}).points
-material(rect::Rectangle) = rect.color
-alignment(::Rectangle) = 4

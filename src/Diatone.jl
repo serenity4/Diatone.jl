@@ -14,7 +14,9 @@ using Base: RefValue
 import Base: close
 @reexport import XCB: set_callbacks!
 @reexport import AbstractGUI: overlay
-@reexport import Lava: render
+import Lava: render!, render
+
+export render
 
 const Optional{T} = Union{T, Nothing}
 const Window = XCBWindow
