@@ -36,7 +36,21 @@ end
 @testset "Diatone.jl" begin
     app = Application()
     win = create_window(app, "Window 1")
-    unwrap(fetch(render(render_main_window, app, win)))
-    unwrap(fetch(set_callbacks(app, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app)))))
-    monitor_children()
+    @test length(children_tasks()) == 2
+    finalize(app)
+    wait(app.finalizer_task)
+    @test isempty(app.ui.wm.windows)
+    @test isempty(children_tasks())
+
+    app = Application()
+    win = create_window(app, "Window 1"; map = false)
+    fetch(render(render_main_window, app, win))
+    fetch(set_callbacks(app, win, WindowCallbacks(; on_key_pressed = Base.Fix1(on_key_pressed, app))))
+    map_window(win)
+    Diatone.run(app)
+    wait(app.finalizer_task)
+    @test isempty(children_tasks())
+    @test isempty(app.ui.wm.windows)
 end;
+
+GC.gc()

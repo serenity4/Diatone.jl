@@ -23,7 +23,6 @@ const Window = XCBWindow
 
 include("render.jl")
 include("ui.jl")
-include("protection.jl")
 include("application.jl")
 
 export Application, UserInterface, Renderer, create_window, Window, set_callbacks

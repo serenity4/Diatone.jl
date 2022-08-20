@@ -1,23 +1,24 @@
 mutable struct Application
   renderer::Renderer
   ui::UserInterface
+  finalizer_task::Optional{Task}
   function Application(; release = false)
-    app = new(Renderer(; release), UserInterface())
+    app = new(Renderer(; release), UserInterface(), nothing)
     finalizer(_shutdown, app)
   end
 end
 
+ConcurrencyGraph.tryexecute(f, x::Union{Renderer,UserInterface}, args...; kwargs...) = ConcurrencyGraph.tryexecute(f, x.task, args...; kwargs...)
+
 function _shutdown(app::Application)
   tasks = children_tasks()
   shutdown_children()
-  @async begin
+  app.finalizer_task = @async begin
     ConcurrencyGraph.wait_timeout(() -> all(istaskdone, tasks), 2, 0.001) || @warn "Timeout: Renderer and UI tasks are still alive. Their finalizers will be run but will result in undefined behavior."
     finalize(app.renderer)
     finalize(app.ui)
   end
 end
-
-Base.getproperty(app::Application, name::Symbol) = Protected(getfield(app, name))
 
 function active_windows(app::Application)
   ret = ConcurrencyGraph.execute(ui -> deepcopy(ui.wm.windows), app.ui, app.ui)
@@ -51,4 +52,6 @@ Wait for the application's event and rendering loops to terminate.
 The event loop handles window events via WindowAbstractions.
 The rendering loop handles graphics rendering via Lava.
 """
-run() = monitor_children(; allow_failures = false)
+function Base.run(app::Application)
+  monitor_children() && finalize(app)
+end
